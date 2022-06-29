@@ -7,7 +7,7 @@ class Hangman
     selection = gets.chomp.to_i
     case selection
     when 1
-      Game.new.turn
+      Game.new.play
     when 2
       Game.new.file_select
     else

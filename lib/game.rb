@@ -1,8 +1,8 @@
 require_relative 'hangman'
 require_relative 'colorize'
 require 'yaml'
-require 'date'
 
+require 'pry-byebug'
 class Game
 
   @@time = Time.now.strftime("%d-%m-%Y %H-%M")
@@ -34,15 +34,15 @@ class Game
   end
 
   def file_select
-    saves = Dir.entries('savedir')
+    saves = Dir.glob("savedir/*.yaml").sort { |file, after| after <=> file }
     puts 'Please select the number of the save file'
-    saves.each_with_index { |file, i| puts "[#{i}] #{file}"}
+    saves.each_with_index { |file, i| puts "[#{i}] #{file.delete('savedir/')}"}
     selection = gets.chomp.to_i
     load_game(saves[selection])
   end
 
   def load_game(file)
-    content = YAML.load(File.read("savedir/#{file}"))
+    content = YAML.load(File.read(file))
     @incorrect_guesses = content[:incorrect_guesses]
     @alphabet_array = content[:alphabet_array]
     @word = content[:word]
@@ -50,7 +50,7 @@ class Game
     @guess_array = content[:guess_array]
     @all_guesses = content[:all_guesses]
     @winner = content[:winner]
-    turn
+    play
   end
 
   def pick_letter
@@ -69,29 +69,39 @@ class Game
     char
   end
 
-  def used?(guess)
-    @alphabet_array.include?(guess)
-  end
-
   def logic(guess)
-    if @word_array.include?(guess)
-      puts "'#{guess}' is a correct guess\n".yellow
-      while @word_array.include?(guess)
-        @guess_array[@word_array.index(guess)] = guess
-        @word_array[@word_array.index(guess)] = '*'
+    if @alphabet_array.include?(guess)
+      @all_guesses << @alphabet_array.delete(guess)
+
+      if @word_array.include?(guess)
+        puts "'#{guess}' is a correct guess\n".yellow
+        while @word_array.include?(guess)
+          @guess_array[@word_array.index(guess)] = guess
+          @word_array[@word_array.index(guess)] = '*'
+        end
+      else
+        @incorrect_guesses += 1
+        puts "'#{guess}' is not part of the word\n".red
       end
-    elsif @guess_array.include?(guess)
+
+    else
       puts "'#{guess}' has been used before\n".red
       new_guess = pick_letter
       logic(new_guess)
-    else
-      @incorrect_guesses += 1
-      puts "'#{guess}' is not part of the word\n".red
     end
   end
 
   def win?
-    @word_array.all?('*')
+    if @word_array.all?('*')
+      puts "You Win!".green
+      true
+    elsif @incorrect_guesses == 10
+      puts "You Lost!".red
+      puts "secret word was #{@word}"
+      true
+    else
+      false
+    end
   end
 
   def turn_text
@@ -100,28 +110,18 @@ class Game
   end
 
   def turn
-    until @incorrect_guesses == 10 || !@winner.nil?
-      turn_text
+    turn_text
 
-      guess = pick_letter
+    guess = pick_letter
 
-      if used?(guess)
-        @all_guesses << @alphabet_array.delete(guess)
-      else
-        puts "'#{guess}' has been used before\n".red
-        turn
-      end
+    print "Guesses: #{@all_guesses.join(' ').pink}\n"
 
-      print "Guesses: #{@all_guesses.join(' ').pink}\n"
-      logic(guess)
+    logic(guess)
+  end
 
-      if win?
-        puts 'You win'.green
-        @winner = true
-      else
-        turn
-      end
-    end
+  def play
+    turn until win?
+    play_again
   end
 
   def play_again
