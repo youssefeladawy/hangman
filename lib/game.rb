@@ -1,11 +1,16 @@
+require_relative 'hangman'
 require_relative 'colorize'
+require 'yaml'
+require 'date'
 
 class Game
+
+  @@time = Time.now.strftime("%d-%m-%Y %H-%M")
   def initialize
     file_name = 'google-english-words.txt'
     content = File.open(file_name, 'r') { |data| data.readlines.each(&:chomp!) }
     content.select! { |line| line.length >= 5 && line.length <= 12 }
-    @guesses = 1
+    @incorrect_guesses = 0
     @alphabet_array = ('a'..'z').to_a
     @word = content.sample
     @word_array = @word.split('')
@@ -14,22 +19,54 @@ class Game
     @winner = nil
   end
 
+  def save_game
+    content = YAML.dump({
+      :incorrect_guesses => @incorrect_guesses,
+      :alphabet_array => @alphabet_array,
+      :word => @word,
+      :word_array => @word_array,
+      :guess_array => @guess_array,
+      :all_guesses => @all_guesses,
+      :winner => @winner
+    })
+    Dir.mkdir('savedir') unless File.exist?('savedir')
+    File.open("savedir/#{@@time}.yaml", 'w') { |file| file.write(content) }
+  end
+
+  def file_select
+    saves = Dir.entries('savedir')
+    puts 'Please select the number of the save file'
+    saves.each_with_index { |file, i| puts "[#{i}] #{file}"}
+    selection = gets.chomp.to_i
+    load_game(saves[selection])
+  end
+
+  def load_game(file)
+    content = YAML.load(File.read("savedir/#{file}"))
+    @incorrect_guesses = content[:incorrect_guesses]
+    @alphabet_array = content[:alphabet_array]
+    @word = content[:word]
+    @word_array = content[:word_array]
+    @guess_array = content[:guess_array]
+    @all_guesses = content[:all_guesses]
+    @winner = content[:winner]
+    turn
+  end
+
   def pick_letter
+    puts "Enter a single letter guess from the alphabet\nYou can enter 'save' to save the game for later\n"
     char = gets.chomp.strip.downcase
-    until char.between?('a', 'z') && char.length == 1
+    until char.between?('a', 'z') && char.length == 1 || char == 'save'
       puts 'Please enter a single letter'.red
       char = gets.chomp.strip.downcase
     end
+    if char == 'save'
+      save_game
+      puts "Your game is now saved as #{@@time}.yaml".yellow
+      play_again
+    end
+
     char
-    # if char.length > 1
-    #   puts 'Only enter a single letter'.red
-    #   pick_letter
-    # elsif char.empty?
-    #   puts 'Please enter a letter'.red
-    #   pick_letter
-    # else
-    #   char
-    # end
   end
 
   def used?(guess)
@@ -48,23 +85,23 @@ class Game
       new_guess = pick_letter
       logic(new_guess)
     else
+      @incorrect_guesses += 1
       puts "'#{guess}' is not part of the word\n".red
     end
   end
 
   def win?
-    if @word_array.all?('*')
-      puts 'You win'.green
-      @winner = true
-    else
-      turn
-    end
+    @word_array.all?('*')
+  end
+
+  def turn_text
+    puts @guess_array.join(' ').yellow
+    puts "Incorrect Guesses #{@incorrect_guesses}:".light_blue
   end
 
   def turn
-    until @guesses > 12 || !@winner.nil?
-      puts @guess_array.join(' ').yellow
-      puts "Turn #{@guesses}: Enter a single letter guess from the alphabet\n".light_blue
+    until @incorrect_guesses == 10 || !@winner.nil?
+      turn_text
 
       guess = pick_letter
 
@@ -75,56 +112,26 @@ class Game
         turn
       end
 
-      @guesses += 1
-      print "Guesses #{@all_guesses.join(' ').pink}\n"
+      print "Guesses: #{@all_guesses.join(' ').pink}\n"
       logic(guess)
-      win?
+
+      if win?
+        puts 'You win'.green
+        @winner = true
+      else
+        turn
+      end
+    end
+  end
+
+  def play_again
+    puts "Would you like to play again \n#{'1-YES'.green} \n#{'2-NO'.red}"
+    selection = gets.chomp.to_i
+    case selection
+    when 1
+      Hangman.new.play
+    else
+      exit
     end
   end
 end
-
-Game.new.turn
-
-# def turn
-#   until $guesses == 12
-#     puts 'Enter a single letter guess from the alphabet'
-#     round_char = gets.chomp.downcase
-#     $alphabet_array.delete(round_char)
-#     if $game_word_arr.include?(round_char)
-#       while $game_word_arr.include?(round_char) # ["e", "r", "i", "c", "s", "s", "o", "n"].include?('s')
-#         p $game_word_arr.index(round_char) # ["e", "r", "i", "c", "s", "s", "o", "n"].index('s') = 4
-#         $player_guess[$game_word_arr.index(round_char)] = round_char # player_guess[4] = 's' > ["-", "-", "-", "-", "s", "-", "-", "-"]
-#         p $player_guess.join(' ')
-#         $game_word_arr[$game_word_arr.index(round_char)] = '*' # ["e", "r", "i", "c", "s", "s", "o", "n"].delete_at(4) > ["e", "r", "i", "c", "s", "o", "n"]
-#         p $game_word_arr
-#       end
-#     else
-#       puts 'no'
-#     end
-#     $guesses += 1
-#     if $game_word_arr.all?('*')
-#       puts 'You win'
-#     else
-#       turn
-#     end
-#   end
-# end
-
-
-# puts 'Enter a single letter guess from the alphabet'
-# round_char = gets.chomp.downcase
-# p round_char
-# $alphabet_array.delete(round_char)
-# # p $alphabet_array
-
-# while game_word_arr.include?(round_char) # ["e", "r", "i", "c", "s", "s", "o", "n"].include?('s')
-#   p game_word_arr.index(round_char) # ["e", "r", "i", "c", "s", "s", "o", "n"].index('s') = 4
-#   player_guess[game_word_arr.index(round_char)] = round_char # player_guess[4] = 's' > ["-", "-", "-", "-", "s", "-", "-", "-"]
-#   p player_guess.join(' ')
-#   game_word_arr[game_word_arr.index(round_char)] = '*' # ["e", "r", "i", "c", "s", "s", "o", "n"].delete_at(4) > ["e", "r", "i", "c", "s", "o", "n"]
-#   p game_word_arr
-# end
-
-# if game_word_arr.all?('*')
-#   winner = true
-# end
